@@ -15,5 +15,5 @@ require("__" .. rc.internal_name .. "__/lib/public/paths")
 -- -- -- CONTENTS INITIALIZATION (data stage)
 ---------------------------------------------------------------------------
 RecipeBook = require(path_m_recipe_book .. "__init__")
+Items      = require(path_m_calculator  .. "__init__")
 
-log("Length of RecipeBook: " .. tostring(#RecipeBook))

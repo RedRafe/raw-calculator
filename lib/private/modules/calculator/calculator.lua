@@ -1,61 +1,60 @@
-local Calculator = {}
-local blacklist = {
-  "coal-liquefaction"
+table.insert(RecipeBook, {
+  name = 'space-science-pack',
+  results = {
+    name = 'space-science-pack',
+    amount = 1,
+    type = 'item',
+    temperature = nil
+  },
+  ingredients = {
+    {
+      name = 'rocket-part',
+      amount = 0.1,
+      type = 'item',
+      temperature = nil
+    }
+  }
+})
+
+local resultNames = getResultNames(RecipeBook)
+local ingredientNames = getIngredientNames(RecipeBook)
+local basicItems = getLeftOuts(ingredientNames, resultNames)
+
+local defaultBasicItems = {
+  ['water'] = 0,
+  ['steam'] = 0
 }
 
-local function isBlacklisted(recipeName)
-  for _, name in pairs(blacklist) do
-    if recipeName == name then return true end
-  end
-  return false
-end
+local ignoreBasicItems = {
+  'used-up-uranium-fuel-cell'
+}
 
-local function fluidManagement(item, recipeName)
-  return (string.sub(item, -7) ~= "-barrel" 
-    and string.sub(recipeName, -7) == "-barrel" 
-    and (string.sub(recipeName, 1, 5) == "fill-" 
-    or string.sub(recipeName, 1, 6) == "empty-"))
-end
+Items:set(basicItems)
+Items:set(defaultBasicItems)
+Items:delete(ignoreBasicItems)
+Items:printDataset()
 
+local previous_length = -1
+local current_length = Items:getLength()
 
-local function getIngredients(recipe)
-  local ingredients = {}
-  for i,ingredient in pairs(recipe.ingredients) do
-    if (ingredient.name and ingredient.amount) then
-      ingredients[ingredient.name] = ingredient.amount
-    elseif (ingredient[1] and ingredient[2]) then
-      ingredients[ingredient[1]] = ingredient[2]
-    end
-  end
-  return ingredients
-end
+while(previous_length < current_length) do
+  for _, recipe in pairs(RecipeBook) do
+    local result = recipe.results.name
+    local ingredients = getItemNames(recipe.ingredients)
 
-local function getProducts(recipe)
-  local products = {}
-  if (recipe.products) then
-    for i,product in pairs(recipe.products) do
-      if (product.name and product.amount) then
-        products[product.name] = product.amount
-      elseif product.amount_min and product.amount_max then
-        products[product.name] =  (product.amount_min + product.amount_max) / 2 * (product.probability or 1)
+    -- recipe already discovered
+    if Items:hasValues(ingredients) then
+      -- compute new value for the result
+      local sum = 0
+      for _, ingredient in pairs(recipe.ingredients) do
+        sum = sum + ingredient.amount * Items.value[ingredient.name]
       end
+      Items:set({[result] = sum})
     end
   end
-  return products
+  previous_length = current_length
+  current_length = Items:getLength()
+  log('Computing recipe costs... ' .. tostring(current_length) .. '/' .. tostring(#RecipeBook))
 end
 
-local function getRecipes(item)
-  local recipes = {}
-  for i, recipe in pairs(game.recipe_prototypes) do
-    if not isBlacklisted(i) and not fluidManagement(item, i) then
-      local products = getProducts(recipe)
-      for product, amount in pairs(products) do
-        if (product == item) then
-          table.insert(recipes, recipe)
-        end
-      end
-    end
-  end
-  return recipes
-end
-
+Items:printDataset()
