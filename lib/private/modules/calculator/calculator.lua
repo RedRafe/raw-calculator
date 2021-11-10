@@ -38,6 +38,7 @@ local previous_length = -1
 local current_length = Items:getLength()
 
 while(previous_length < current_length) do
+  log('Computing recipe costs... ' .. tostring(current_length) .. '/' .. tostring(#RecipeBook))
   for _, recipe in pairs(RecipeBook) do
     local result = recipe.results.name
     local ingredients = getItemNames(recipe.ingredients)
@@ -54,7 +55,6 @@ while(previous_length < current_length) do
   end
   previous_length = current_length
   current_length = Items:getLength()
-  log('Computing recipe costs... ' .. tostring(current_length) .. '/' .. tostring(#RecipeBook))
 end
 
 Items:printDataset()
