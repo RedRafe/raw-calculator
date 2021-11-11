@@ -51,6 +51,7 @@ while(previous_length < current_length) do
         sum = sum + ingredient.amount * Items.value[ingredient.name]
       end
       Items:set({[result] = sum})
+      --Items:set({[result] = sum / result.amount})
     end
   end
   previous_length = current_length
