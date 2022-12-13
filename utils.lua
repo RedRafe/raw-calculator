@@ -53,4 +53,12 @@ function Utils.startup(key)
   return settings.startup[key].value and 1 or 0
 end
 
+function Utils.sum(tbl)
+  s = 0
+  for i,v in ipairs(tbl) do
+    s = s + v
+  end
+  return s
+end
+
 return Utils

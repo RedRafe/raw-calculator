@@ -1,19 +1,8 @@
----------------------------------------------------------------------------
--- -- -- PRE INITIALIZATION
----------------------------------------------------------------------------
--- General Info
-rc                               = {} 
-rc.internal_name                 = "raw-calculator"
-rc.title_name                    = "Raw Calculator"
-rc.version                       = mods[rc.internal_name]
-rc.stage                        = "data"
+techover = {} 
+techover.prefix = "to-"
+techover.base = "__technology-overload__/"
+techover.internal_name = "technology-overload"
+techover.name  = "Technology Overload"
 
--- -- Global Mod paths
-require("__" .. rc.internal_name .. "__/lib/public/paths")
-
----------------------------------------------------------------------------
--- -- -- CONTENTS INITIALIZATION (data stage)
----------------------------------------------------------------------------
-RecipeBook = require(path_m_recipe_book .. "__init__")
-Items      = require(path_m_calculator  .. "__init__")
+require(techover.base .. "technology")
 
