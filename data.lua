@@ -17,3 +17,4 @@ require("__" .. rc.internal_name .. "__/lib/public/paths")
 RecipeBook = require(path_m_recipe_book .. "__init__")
 Items      = require(path_m_calculator  .. "__init__")
 
+Items:printDataset()
