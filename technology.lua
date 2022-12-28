@@ -6,6 +6,10 @@ local MAX_UINT32     = 0xFFFFFFFF
 local MAX_INT64      = 0x7FFFFFFFFFFFFFFF
 local MAX_DOUBLE     = 0x1.FFFFFFFFFFFFFP+1023
 
+---------------------------------------------------------------------------
+-- -- -- Helper Functions
+---------------------------------------------------------------------------
+
 -- Whether a Prototype/Technology has a count_formula or not
 -- @ technology: Prototype/Technology
 local function hasFormula(technology)
@@ -45,6 +49,15 @@ local function getTechnologyUnitFormula(technology)
   return nil
 end
 
+-- @ technology: Prototype/Technology
+local function getTechnologyPrerequisites(technology)
+  local prerequisites = {}
+  for _, prerequisite in pairs(technology.prerequisites) do
+    table.insert(prerequisites, data.raw.technology[prerequisite])
+  end
+  return prerequisites
+end
+
 -- @ technologyName: String
 -- @ value: int
 local function setTechnologyUnitCount(technologyName, value)
@@ -79,8 +92,8 @@ local function getTechnologyDepth(technology)
   local currentDepth = 1
   if hasPrerequisites(technology) then
     local depths = {}
-    for _, prereqsisite in pairs(technology.prerequisites) do
-      table.insert(depths, getTechnologyDepth(data.raw.technology[prereqsisite]))
+    for _, prerequisite in pairs(technology.prerequisites) do
+      table.insert(depths, getTechnologyDepth(data.raw.technology[prerequisite]))
     end
     table.sort(depths)
     return currentDepth + depths[#depths]
@@ -88,157 +101,205 @@ local function getTechnologyDepth(technology)
   return currentDepth
 end
 
--- @ technology: Prototype/Technology
-local function getCumulativeCost(technology)
-  local currentCost = getTechnologyUnitCount(technology) or 0
-  if hasPrerequisites(technology) then
-    local depths = {}
-    for _, prereqsisite in pairs(technology.prerequisites) do
-      table.insert(depths, getCumulativeCost(data.raw.technology[prereqsisite]))
-    end
-    return currentCost + utils.sum(depths)
+local function findMaxDepth()
+  local maxDepth = 0
+  for _, tech in pairs(data.raw.technology) do
+    local depth = getTechnologyDepth(tech)
+    if depth > maxDepth then maxDepth = depth end
   end
-  return currentCost
+  return maxDepth
 end
+
+-- @ base: number
+-- @ base: int
+local function Exp(base, power)
+  local result = base
+  power = math.floor(power)
+  while power > 0 do
+    result = result * base
+    power = power - 1
+  end
+  return result
+end
+
+-- @ currentDepth: int
+-- @ p as preset
+local function BaseDepth(currentDepth, p)
+  if not p.applyDepth then return 1 end
+  if p.inverseDepth then
+    return Exp(p.maxDepth - currentDepth + 1, p.depthExp)
+  end
+  return Exp(currentDepth, p.depthExp)
+end
+
+---------------------------------------------------------------------------
+-- -- -- Cost Computation
+---------------------------------------------------------------------------
+
+-- @ technology: Prototype/Technology
+local function Fibonacci(technology, p)
+  local currentCost = getTechnologyUnitCount(technology) or 0
+  local currentDepth = getTechnologyDepth(technology)
+  local prerequisiteCost = 0
+  if hasPrerequisites(technology) then
+    local depth = {}
+    for _, prerequisiteName in pairs(technology.prerequisites) do
+      local prerequisite = data.raw.technology[prerequisiteName]
+      table.insert(depth, prerequisite)
+      if hasPrerequisites(prerequisite) then
+        for _, prerequisiteName2 in pairs(prerequisite.prerequisites) do
+          table.insert(depth, data.raw.technology[prerequisiteName2])
+        end
+      end
+    end
+    local sumFibonacci = 0
+    for _, tech in pairs(depth) do
+      sumFibonacci = sumFibonacci + Fibonacci(tech, p)
+    end
+    prerequisiteCost = sumFibonacci
+  end
+  return currentCost * p.treeCoefficient * BaseDepth(currentDepth, p) + prerequisiteCost
+end
+
+-- @ technology: Prototype/Technology
+-- @ p as preset of attributes:
+  -- searchDepth: int,        refers to max depth to search. -1 means all depths
+  -- treeCoefficient: int,    multiplies cost by this value
+  -- applyDepth: bool 0/1,    wheter to multiply depth coefficient
+  -- depthExp: int,           power of the exponent base
+  -- maxDepth: int,           max depth across the tech tree
+  -- inverseDepth: bool 0/1,  wheter to apply reverse depth computation
+local function exponentialCumulativeCost(technology, p)
+  local currentCost = getTechnologyUnitCount(technology) or 0
+  local currentDepth = getTechnologyDepth(technology)
+  local prerequisiteCost = 0
+  if hasPrerequisites(technology) and p.searchDepth then
+    local depths = {}
+    for _, prerequisite in pairs(technology.prerequisites) do
+      table.insert(depths, exponentialCumulativeCost(data.raw.technology[prerequisite], p))
+    end
+    prerequisiteCost = utils.sum(depths)
+  end
+  return currentCost * p.treeCoefficient * BaseDepth(currentDepth, p) + prerequisiteCost
+end
+
 ---------------------------------------------------------------------------
 -- -- -- Difficulty Levels 
 ---------------------------------------------------------------------------
 
+-- Fibonacci
+local function difficultyFibonacci(techs, p)
+  for _, tech in pairs(techs) do
+    if tech.count ~= nil then
+      setTechnologyUnitCount(tech.name, tech.ecc)
+    end
+    if tech.formula ~= nil then
+      local formula = tostring(tech.ecc) .. '+(' .. tech.formula .. ')*' .. tostring(p.treeCoefficient * BaseDepth(tech.depth, p))
+      setTechnologyUnitFormula(tech.name, formula)
+    end
+  end
+end
+
 -- Funnel
-local function difficultyFunnel(techs)
-  -- A. get max depth
-  local depths = {}
-  for _, tech in pairs(techs) do
-    table.insert(depths, tech.depth)
-  end
-  table.sort(depths)
-  local maxDepth = depths[#depths]
-  -- B. use max depth - depth + 1 as multiplier
+local function difficultyFunnel(techs, p)
   for _, tech in pairs(techs) do
     if tech.count ~= nil then
-      local cost = tech.count * (maxDepth - tech.depth + 1)
-      setTechnologyUnitCount(tech.name, cost)
+      setTechnologyUnitCount(tech.name, tech.ecc)
     end
     if tech.formula ~= nil then
-      local formula = '(' .. tostring(maxDepth - tech.depth + 1) .. '+L)*(' .. tech.formula .. ")"
+      local formula = '(' .. tech.formula .. ')*' .. tostring(BaseDepth(tech.depth, p))
       setTechnologyUnitFormula(tech.name, formula)
     end
   end
 end
 
--- Miserable Spoon (Funnel Squared * 10)
-local function difficultyMiserableSpoon(techs)
-  -- A. get max depth
-  local depths = {}
-  for _, tech in pairs(techs) do
-    table.insert(depths, tech.depth)
-  end
-  table.sort(depths)
-  local maxDepth = depths[#depths]
-  -- B. use max depth - depth + 1 as multiplier
+-- Miserable Spoon (Funnel Squared * treeCoefficient)
+local function difficultyMiserableSpoon(techs, p)
   for _, tech in pairs(techs) do
     if tech.count ~= nil then
-      --local cost = tech.count * (maxDepth * maxDepth * 10 - tech.depth + 1)
-      local cost = tech.count * ((maxDepth - tech.depth + 1) * (maxDepth - tech.depth + 1) * 10)
-      setTechnologyUnitCount(tech.name, cost)
+      setTechnologyUnitCount(tech.name, tech.ecc)
     end
     if tech.formula ~= nil then
-      local formula = '(' .. tostring(maxDepth * maxDepth * 10 - tech.depth + 1) .. '+L)*(' .. tech.formula .. ")"
-      setTechnologyUnitFormula(tech.name, formula)
-    end
-  end
-end
-
--- Tree
-local function difficultyTree(techs)
-  local TreeCoefficient = settings.startup["to-tree-coefficient"].value or 1
-  for _, tech in pairs(techs) do
-    --applyTechnologyCostModifier(tech, math.floor(cost), formula)
-    if tech.count ~= nil then
-      local cost = tech.count * tech.depth * TreeCoefficient
-      setTechnologyUnitCount(tech.name, cost)
-    end
-    if tech.formula ~= nil then
-      local formula = 'L*(' .. tech.formula .. ")*" .. tostring(TreeCoefficient)
-      setTechnologyUnitFormula(tech.name, formula)
-    end
-  end
-end
-
--- Mad Tree
-local function difficultyMadTree(techs)
-  local TreeCoefficient = settings.startup["to-tree-coefficient"].value or 1
-  for _, tech in pairs(techs) do
-    --applyTechnologyCostModifier(tech, math.floor(cost), formula)
-    if tech.count ~= nil then
-      local cost = tech.ccost * tech.depth * TreeCoefficient
-      setTechnologyUnitCount(tech.name, cost)
-    end
-    if tech.formula ~= nil then
-      local formula = 'L*(' .. tech.formula .. ")*" .. tostring(TreeCoefficient)
-      local formula = tech.formula
-      formula = formula .. '+' .. tech.ccost
-      formula = '(L+' .. tostring(TreeCoefficient * tech.depth) .. ')*(' .. formula .. ')'
+      local formula = '(' .. tech.formula .. ')*' .. tostring(BaseDepth(tech.depth, p))
       setTechnologyUnitFormula(tech.name, formula)
     end
   end
 end
 
 -- Spiral
-local function difficultySpiral(techs)
+local function difficultySpiral(techs, p)
   for _, tech in pairs(techs) do
-    --applyTechnologyCostModifier(tech, math.floor(cost), formula)
     if tech.count ~= nil then
-      local cost = tech.count * tech.depth
-      setTechnologyUnitCount(tech.name, cost)
+      setTechnologyUnitCount(tech.name, tech.ecc)
     end
     if tech.formula ~= nil then
-      local formula = '(' .. tostring(tech.depth) .. '+L)*(' .. tech.formula .. ")"
+      local formula = '(' .. tech.formula .. ')*' .. tostring(BaseDepth(tech.depth, p) * p.treeCoefficient)
       setTechnologyUnitFormula(tech.name, formula)
     end
   end
 end
 
 -- Mad Spiral
-local function difficultyMadSpiral(techs)
+local function difficultyMadSpiral(techs, p)
   for _, tech in pairs(techs) do
-    --applyTechnologyCostModifier(tech, math.floor(cost), formula)
     if tech.count ~= nil then
-      local cost = tech.ccost * tech.depth
-      setTechnologyUnitCount(tech.name, cost)
+      setTechnologyUnitCount(tech.name, tech.ecc)
     end
     if tech.formula ~= nil then
-      local formula = '(' .. tostring(tech.depth) .. '+L)*(' .. tech.formula .. ")+" .. tostring(tech.ccost * tech.depth)
+      local formula = tostring(tech.ecc) .. '+(' .. tech.formula .. ')*' .. tostring(BaseDepth(tech.depth, p) * p.treeCoefficient)
       setTechnologyUnitFormula(tech.name, formula)
     end
   end
 end
 
--- Fibonacci
-local function difficultyFibonacci(techs)
+-- Tree
+local function difficultyTree(techs, p)
   for _, tech in pairs(techs) do
-    --applyTechnologyCostModifier(tech, math.floor(cost), formula)
     if tech.count ~= nil then
-      local cost = tech.ccost
-      setTechnologyUnitCount(tech.name, cost)
+      setTechnologyUnitCount(tech.name, tech.ecc)
     end
     if tech.formula ~= nil then
-      local formula = tech.formula .. '+' .. tostring(math.floor(tech.ccost))
+      local formula = '(' .. tech.formula .. ')*' .. tostring(BaseDepth(tech.depth, p) * p.treeCoefficient)
+      setTechnologyUnitFormula(tech.name, formula)
+    end
+  end
+end
+
+-- Mad Tree
+local function difficultyMadTree(techs, p)
+  for _, tech in pairs(techs) do
+    if tech.count ~= nil then
+      setTechnologyUnitCount(tech.name, tech.ecc)
+    end
+    if tech.formula ~= nil then
+      local formula = 'L*(' .. tech.formula .. ")*" .. tostring(p.treeCoefficient)
+      local formula = tostring(tech.ecc) .. '+(' .. tech.formula .. ')*' .. tostring(BaseDepth(tech.depth, p) * p.treeCoefficient)
       setTechnologyUnitFormula(tech.name, formula)
     end
   end
 end
 
 -- A Long Way Home
-local function difficultyALongWayHome(techs)
+local function difficultyALongWayHome(techs, p)
   for _, tech in pairs(techs) do
-    --applyTechnologyCostModifier(tech, math.floor(cost), formula)
     if tech.count ~= nil then
-      local cost = tech.count * tech.depth * tech.depth
-      setTechnologyUnitCount(tech.name, cost)
+      setTechnologyUnitCount(tech.name, tech.ecc)
     end
     if tech.formula ~= nil then
-      local formula = '(' .. tostring(tech.depth * tech.depth) .. '+L)*(' .. tech.formula .. ")"
+      local formula = '(' .. tech.formula .. ')*' .. tostring(BaseDepth(tech.depth, p) * p.treeCoefficient)
+      setTechnologyUnitFormula(tech.name, formula)
+    end
+  end
+end
+
+-- Custom
+local function difficultyCustom(techs, p)
+  for _, tech in pairs(techs) do
+    if tech.count ~= nil then
+      setTechnologyUnitCount(tech.name, tech.ecc)
+    end
+    if tech.formula ~= nil then
+      local formula = '(' .. tech.formula .. ')*' .. tostring(BaseDepth(tech.depth, p) * p.treeCoefficient)
       setTechnologyUnitFormula(tech.name, formula)
     end
   end
@@ -249,7 +310,9 @@ end
 techover.technology.getCount          = getTechnologyUnitCount
 techover.technology.getFormula        = getTechnologyUnitFormula
 techover.technology.getDepth          = getTechnologyDepth
-techover.technology.getCumulativeCost = getCumulativeCost
+techover.technology.getMaxDepth       = findMaxDepth
+techover.technology.getExpCumCost     = exponentialCumulativeCost
+techover.technology.getFibonacciCost  = Fibonacci
 techover.technology.None           = nil
 techover.technology.Funnel         = difficultyFunnel
 techover.technology.MiserableSpoon = difficultyMiserableSpoon
@@ -259,3 +322,4 @@ techover.technology.Spiral         = difficultySpiral
 techover.technology.MadSpiral      = difficultyMadSpiral
 techover.technology.Fibonacci      = difficultyFibonacci
 techover.technology.ALongWayHome   = difficultyALongWayHome
+techover.technology.Custom         = difficultyCustom

@@ -1,38 +1,86 @@
-database_techs = {}
+-- -- Import libraries
+local T      = techover.technology
+local CONFIG = require("__technology-overload__/" .. "config")
 
--- A. iterate data.raw and save technology info
-for _, _technology in pairs(data.raw.technology) do
-  local _tech = {}
 
-  _tech.name    = _technology.name
-  _tech.count   = techover.technology.getCount(_technology)
-  _tech.formula = techover.technology.getFormula(_technology)
-  _tech.depth   = techover.technology.getDepth(_technology)
-  _tech.ccost   = techover.technology.getCumulativeCost(_technology)
+-- A. get settings from startup
+local difficulty      = settings.startup["to-difficulty"].value
+local preset          = CONFIG.presets[difficulty]
+      preset.maxDepth = T.getMaxDepth()
+local database_techs  = {}
 
-  table.insert(database_techs, _tech)
+-- B. iterate data.raw and save technology info
+local function computeCost(db, p, equation)
+  for _, technology in pairs(data.raw.technology) do
+    local tech = {}
+  
+    tech.name    = technology.name
+    tech.count   = T.getCount(technology)
+    tech.formula = T.getFormula(technology)
+    tech.depth   = T.getDepth(technology)
+    tech.ecc     = equation(technology, p)
+  
+    table.insert(db, tech)
+  end
 end
 
--- B. get settings from startup
-local difficulty = settings.startup["to-difficulty"].value
+local function updatePresetParams()
+  return {
+    searchDept      = settings.startup["to-searchDept"].value,
+    treeCoefficient = settings.startup["to-treeCoefficient"].value,
+    applyDepth      = settings.startup["to-applyDepth"].value,
+    depthExp        = settings.startup["to-depthExp"].value,
+    inverseDepth    = settings.startup["to-inverseDepth"].value
+  }
+end
+
+if settings.startup["to-allowCustomization"].value then
+  preset = updatePresetParams()
+end
 
 -- C. apply difficulty multiplier
 if difficulty == "None" then
   --pass
-elseif difficulty == "Funnel" then
-  techover.technology.Funnel(database_techs)
-elseif difficulty == "Miserable Spoon" then
-  techover.technology.MiserableSpoon(database_techs)
-elseif difficulty == "Spiral" then
-  techover.technology.Spiral(database_techs)
-elseif difficulty == "Mad Spiral" then
-  techover.technology.MadSpiral(database_techs)
-elseif difficulty == "Tree" then
-  techover.technology.Tree(database_techs)
-elseif difficulty == "Mad Tree" then
-  techover.technology.MadTree(database_techs)
+
 elseif difficulty == "Fibonacci" then
-  techover.technology.Fibonacci(database_techs)
+  computeCost(database_techs, preset, T.getFibonacciCost)
+  T.Fibonacci(database_techs, preset)
+
+elseif difficulty == "Funnel" then
+  computeCost(database_techs, preset, T.getExpCumCost)
+  T.Funnel(database_techs, preset)
+
+elseif difficulty == "Miserable Spoon" then
+  computeCost(database_techs, preset, T.getExpCumCost)
+  T.MiserableSpoon(database_techs, preset)
+
+elseif difficulty == "Spiral" then
+  computeCost(database_techs, preset, T.getExpCumCost)
+  T.Spiral(database_techs, preset)
+
+elseif difficulty == "Mad Spiral" then
+  computeCost(database_techs, preset, T.getExpCumCost)
+  T.MadSpiral(database_techs, preset)
+
+elseif difficulty == "Tree" then
+  computeCost(database_techs, preset, T.getExpCumCost)
+  T.Tree(database_techs, preset)
+
+elseif difficulty == "Mad Tree" then
+  computeCost(database_techs, preset, T.getExpCumCost)
+  T.MadTree(database_techs, preset)
+
 elseif difficulty == "A Long Way Home" then
-  techover.technology.ALongWayHome(database_techs)
+  computeCost(database_techs, preset, T.getExpCumCost)
+  T.ALongWayHome(database_techs, preset)
+
+elseif difficulty == "Custom Exponential" then
+  preset = updatePresetParams()
+  computeCost(database_techs, preset, T.getExpCumCost)
+  T.Custom(database_techs, preset)
+
+elseif difficulty == "Custom Fibonacci" then
+  computeCost(database_techs, preset, T.getFibonacciCost)
+  T.Fibonacci(database_techs, preset)
+
 end

@@ -9,8 +9,8 @@ Here's the description of what each game mode consist of as well as a general ra
 Game modes:
 
 - [1/10] None, plain vanilla tech cost
-- [5/10] Funnel (slow start, fast endgame)
-- [8/10] Miserable Spoon (Funnel^2 * 10)
+- [8/10] Funnel (slow start, fast endgame)
+- [11/10] Miserable Spoon (Funnel^2 * 10)
 - [6/10] Fibonacci (cumulative)
 - [3/10] Spiral (X * N, N=depth, Ct=1)
 - [7/10] Mad Spiral (Fibonacci * N, N=depth)
