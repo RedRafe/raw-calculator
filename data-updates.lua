@@ -30,13 +30,16 @@ local function updatePresetParams()
     treeCoefficient = settings.startup["to-treeCoefficient"].value,
     applyDepth      = settings.startup["to-applyDepth"].value,
     depthExp        = settings.startup["to-depthExp"].value,
-    inverseDepth    = settings.startup["to-inverseDepth"].value
+    inverseDepth    = settings.startup["to-inverseDepth"].value,
+    maxDepth        = preset.maxDepth
   }
 end
 
 if settings.startup["to-allowCustomization"].value then
   preset = updatePresetParams()
 end
+
+log(serpent.block(preset))
 
 -- C. apply difficulty multiplier
 if difficulty == "None" then

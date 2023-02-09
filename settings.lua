@@ -33,21 +33,21 @@ data:extend({
 		order = "to-400"
 	},
 	{
-		type = "int-setting",
+		type = "double-setting",
 		name = "to-treeCoefficient",
 		setting_type = "startup",
 		default_value = DEFAULT.treeCoefficient,
-		minimum_value = 1,
+		minimum_value = 1 / 100000,
     maximum_value = 100000,
 		order = "to-500"
 	},
 	{
-		type = "int-setting",
+		type = "double-setting",
 		name = "to-depthExp",
 		setting_type = "startup",
 		default_value = DEFAULT.depthExp,
-		minimum_value = 1,
-    maximum_value = 10,
+		minimum_value = 1 / 1000,
+    maximum_value = 1000,
 		order = "to-600"
 	},
 	{
