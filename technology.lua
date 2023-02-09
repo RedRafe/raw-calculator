@@ -114,7 +114,7 @@ end
 -- @ base: int
 local function Exp(base, power)
   local result = base
-  power = math.floor(power)
+  power = math.floor(power - 1)
   while power > 0 do
     result = result * base
     power = power - 1
